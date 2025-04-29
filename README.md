@@ -1,14 +1,20 @@
 # MeowOS
 
-A minimal, custom operating system with a simple shell.
+A minimal, custom linux-based "operating system", with custom shell, init, busybox, v6.1 kernel, etc.
+
+![MeowOS](./readme-terminal.png)
 
 ## Project Structure
 
 - `/` - Main project directory
   - `/shell` - Custom shell implementation
+  - `/init` - Custom init.sh + init.c wrapper implementation
   - `/initramfs` - Generated directory for initial ramdisk
   - `Makefile` - Main build system
-  - `kernel.config` - Optional Linux kernel configuration
+  - `kernel.config.tiny` - Smaller linux kernel configuration
+  - `kernel.config.def` - Default/heavier linux kernel configuration
+  - `busybox.config` - BusyBox configuration
+  - `initramfs-shallow` - Hard files to copy into initramfs
 
 ## Building
 
@@ -22,11 +28,14 @@ A minimal, custom operating system with a simple shell.
 ### Build Commands
 
 ```bash
-# Build everything (shell, busybox, initramfs, kernel)
+# Build everything for x86_64 -> bzImage,cpio + iso (shell, init, busybox, initramfs, kernel)
 make all
 
 # Build just the shell
-make shell
+make {shell,init}
+
+# Menuconfig for kernel, busybox
+make {menuconfig_kernel,menuconfig_busybox}
 
 # Clean build artifacts
 make clean
