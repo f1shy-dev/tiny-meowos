@@ -27,7 +27,6 @@ echo -e "${CYAN}  > ^ <  ${NC}"
 echo -e "${PURPLE}Welcome to MeowOS! Purr-fect system is ready.${NC}"
 
 echo -e ""
-echo -e "${GREY}[+] Dropping to shell...${NC}"
 
 /bin/busybox uname -a
 echo -e ""

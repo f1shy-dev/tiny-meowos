@@ -6,6 +6,7 @@ CROSS_COMPILE := x86_64-linux-gnu-
 export CROSS_COMPILE
 
 # Variables
+IS_TINY := 1
 SHELL_DIR := shell
 INIT_DIR := init
 WORKDIR := $(CURDIR)
@@ -18,7 +19,11 @@ BUSYBOX_BINARY := $(BUSYBOX_DIR)/busybox
 INITRAMFS_ARCHIVE := $(WORKDIR)/init.cpio
 
 # List of busybox applets to link
-BUSYBOX_APPLETS := ash cat cp ls mkdir mount umount sh echo grep vi find
+BUSYBOX_APPLETS := ash cat cp ls mkdir mount umount sh echo grep vi find clear \
+                    rm touch chmod chown ps top free df du dmesg uname hostname \
+                    kill killall sleep ping ifconfig ip route netstat wget tar \
+                    gzip gunzip unzip sed awk cpio sync reboot poweroff insmod \
+                    rmmod lsmod modprobe sort
 
 # Sentinel file for busybox symlinks
 BUSYBOX_SYMLINKS_SENTINEL := $(INITRAMFS_ROOT)/.busybox_symlinks
@@ -113,11 +118,12 @@ $(INITRAMFS_ARCHIVE): $(INITRAMFS_ROOT)/bin/shell $(INITRAMFS_ROOT)/bin/busybox 
 # Copy kernel config
 .PHONY: kernel_config
 kernel_config:
-	@if [ -f kernel.config ]; then \
-		echo "Copying kernel config..."; \
-		cp kernel.config $(LINUX_DIR)/.config; \
+	@if [ -f $(IS_TINY) ]; then \
+		echo "Copying tiny kernel config..."; \
+		cp kernel.config.tiny $(LINUX_DIR)/.config; \
 	else \
-		echo "No kernel.config found - using existing .config in kernel directory"; \
+		echo "Copying default kernel config..."; \
+		cp kernel.config.def $(LINUX_DIR)/.config; \
 	fi
 
 # Target for building the kernel ISO
