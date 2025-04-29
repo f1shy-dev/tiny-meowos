@@ -20,7 +20,7 @@ environ:
 arg0:
     .string "/bin/sh"
 arg1:
-    .string "/init.sh"
+    .string "/sbin/init.sh"
 
 # Error message if execve fails
 error_msg:
