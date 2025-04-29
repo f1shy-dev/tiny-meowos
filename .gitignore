@@ -10,9 +10,6 @@
 # Generated files
 init.cpio
 initramfs/
-busybox-*/
-busybox-*.tar.bz2
-busybox
 # Linux kernel related
 # linux/
 

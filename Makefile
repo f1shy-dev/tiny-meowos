@@ -7,16 +7,14 @@ export CROSS_COMPILE
 
 # Variables
 SHELL_DIR := shell
+INIT_DIR := init
 WORKDIR := $(CURDIR)
 INITRAMFS_ROOT := $(WORKDIR)/initramfs
 LINUX_DIR_REL := ./linux
 LINUX_DIR := $(realpath $(LINUX_DIR_REL))
-BUSYBOX_VERSION := 1.36.1
-BUSYBOX_URL := https://busybox.net/downloads/busybox-$(BUSYBOX_VERSION).tar.bz2
-BUSYBOX_TARBALL := $(WORKDIR)/busybox-$(BUSYBOX_VERSION).tar.bz2
-BUSYBOX_SRCDIR := $(WORKDIR)/busybox-$(BUSYBOX_VERSION)
-BUSYBOX_CONFIG := $(BUSYBOX_SRCDIR)/.config
-BUSYBOX_BINARY := $(BUSYBOX_SRCDIR)/busybox
+BUSYBOX_DIR := $(WORKDIR)/busybox
+BUSYBOX_CONFIG := $(BUSYBOX_DIR)/.config
+BUSYBOX_BINARY := $(BUSYBOX_DIR)/busybox
 INITRAMFS_ARCHIVE := $(WORKDIR)/init.cpio
 
 # List of busybox applets to link
@@ -53,35 +51,50 @@ shell:
 	$(MAKE) -C $(SHELL_DIR) clean
 	$(MAKE) -C $(SHELL_DIR)
 
+# Build the init program
+.PHONY: init
+init:
+	$(MAKE) -C $(INIT_DIR) clean
+	$(MAKE) -C $(INIT_DIR)
+
 # Install shell to initramfs
 $(INITRAMFS_ROOT)/bin/shell: shell dirs
 	cp $(SHELL_DIR)/shell $@
 
-# Targets for BusyBox
-$(BUSYBOX_TARBALL):
-	wget $(BUSYBOX_URL) -O $@
+# Install init to initramfs and copy init.sh
+$(INITRAMFS_ROOT)/init: init dirs
+	cp $(INIT_DIR)/init $@
+	cp $(INIT_DIR)/init.sh $(INITRAMFS_ROOT)/init.sh
+	chmod +x $@
+	chmod +x $(INITRAMFS_ROOT)/init.sh
+	# Verify init file is executable in target env
+	file $@
 
-$(BUSYBOX_SRCDIR)/.unpacked: $(BUSYBOX_TARBALL)
-	tar xjf $< -C $(WORKDIR)
-	@touch $@
+$(BUSYBOX_DIR)/.config:
+	@if [ ! -d $(BUSYBOX_DIR) ]; then \
+		echo "BusyBox directory not found. Please run 'git submodule init' and 'git submodule update'"; \
+		exit 1; \
+	fi
+	@if [ -f $(WORKDIR)/busybox.config ]; then \
+		echo "Using custom BusyBox config..."; \
+		cp $(WORKDIR)/busybox.config $(BUSYBOX_DIR)/.config; \
+		# Ensure cross-compiler is set correctly even in custom config; \
+		sed -i 's/^CONFIG_CROSS_COMPILER_PREFIX=.*/CONFIG_CROSS_COMPILER_PREFIX="$(subst /,\/,$(CROSS_COMPILE))"/' $(BUSYBOX_DIR)/.config; \
+	else \
+		echo "No custom BusyBox config found. Generating default config..."; \
+		cd $(BUSYBOX_DIR) && $(MAKE) defconfig; \
+		sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' $(BUSYBOX_DIR)/.config; \
+		# Set cross-compilation in BusyBox config; \
+		sed -i 's/^CONFIG_CROSS_COMPILER_PREFIX=.*/CONFIG_CROSS_COMPILER_PREFIX="$(subst /,\/,$(CROSS_COMPILE))"/' $(BUSYBOX_DIR)/.config; \
+		sed -i 's/^CONFIG_EXTRA_LDFLAGS=""/CONFIG_EXTRA_LDFLAGS="-L/usr/x86_64-linux-gnu/lib"/' $(BUSYBOX_DIR)/.config; \
+	fi
 
-$(BUSYBOX_CONFIG): $(BUSYBOX_SRCDIR)/.unpacked
-	cd $(BUSYBOX_SRCDIR) && $(MAKE) defconfig
-	sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' $@
-	# Set cross-compilation in BusyBox config
-	sed -i 's/^CONFIG_CROSS_COMPILER_PREFIX=""/CONFIG_CROSS_COMPILER_PREFIX="$(subst /,\/,$(CROSS_COMPILE))"/' $@
-	# Add extra library path for static libraries
-	echo 'CONFIG_EXTRA_LDFLAGS="-L/usr/x86_64-linux-gnu/lib"' >> $@
+$(BUSYBOX_BINARY): $(BUSYBOX_DIR)/.config
+	cd $(BUSYBOX_DIR) && $(MAKE) -j$(shell nproc) ARCH=x86_64 CROSS_COMPILE=$(CROSS_COMPILE)
 
-$(BUSYBOX_BINARY): $(BUSYBOX_CONFIG)
-	cd $(BUSYBOX_SRCDIR) && $(MAKE) -j$(shell nproc)
-
-# Copy busybox binary to WORKDIR (cache) and initramfs
-$(WORKDIR)/busybox: $(BUSYBOX_BINARY)
-	cp $< $@
-
-$(INITRAMFS_ROOT)/bin/busybox: $(WORKDIR)/busybox dirs
-	cp $< $@
+# Copy busybox binary directly to initramfs without intermediate copy
+$(INITRAMFS_ROOT)/bin/busybox: $(BUSYBOX_BINARY) dirs
+	cp $(BUSYBOX_BINARY) $@
 
 # Target for creating BusyBox symlinks
 $(BUSYBOX_SYMLINKS_SENTINEL): $(INITRAMFS_ROOT)/bin/busybox
@@ -91,16 +104,11 @@ $(BUSYBOX_SYMLINKS_SENTINEL): $(INITRAMFS_ROOT)/bin/busybox
 	  done
 	@touch $@
 
-# Target for creating the init script
-$(INITRAMFS_ROOT)/init: dirs
-	cp $(WORKDIR)/init.sh $@
-	chmod +x $@
-
 # Target for creating the initramfs archive
 # Depends on the essential components being present
 $(INITRAMFS_ARCHIVE): $(INITRAMFS_ROOT)/bin/shell $(INITRAMFS_ROOT)/bin/busybox $(BUSYBOX_SYMLINKS_SENTINEL) $(INITRAMFS_ROOT)/init
 	@echo "Creating initramfs archive..."
-	cd $(INITRAMFS_ROOT) && find . | cpio -H newc -o | gzip > $(INITRAMFS_ARCHIVE)
+	cd $(INITRAMFS_ROOT) && find . | cpio -H newc -o > $(INITRAMFS_ARCHIVE)
 
 # Copy kernel config
 .PHONY: kernel_config
@@ -133,12 +141,12 @@ run:
 .PHONY: clean
 clean:
 	$(MAKE) -C $(SHELL_DIR) clean
+	cd $(BUSYBOX_DIR) && $(MAKE) clean
 	rm -f $(INITRAMFS_ARCHIVE)
 	rm -rf $(INITRAMFS_ROOT)
 
 .PHONY: distclean
 distclean: clean
-	rm -rf $(BUSYBOX_SRCDIR) $(BUSYBOX_TARBALL)
-	rm -f $(WORKDIR)/busybox
 	# Optionally clear kernel build artifacts if needed
 	cd $(LINUX_DIR) && ARCH=x86_64 CROSS_COMPILE=$(CROSS_COMPILE) $(MAKE) clean 
+	cd $(BUSYBOX_DIR) && ARCH=x86_64 CROSS_COMPILE=$(CROSS_COMPILE) $(MAKE) clean
