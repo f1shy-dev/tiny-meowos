@@ -1,0 +1,29 @@
+# Build artifacts
+*.o
+*.a
+*.so
+*.ko
+*.mod.c
+*.order
+*.symvers
+
+# Generated files
+init.cpio
+initramfs/
+busybox-*/
+busybox-*.tar.bz2
+busybox
+# Linux kernel related
+# linux/
+
+# Build temporary files
+*.tmp
+*.swp
+*~
+
+# QEMU related
+*.qcow2
+*.img
+
+# Other binaries
+/shell/shell 
