@@ -16,12 +16,17 @@ SHELL_DIR := shell
 INIT_DIR := init
 WORKDIR := $(CURDIR)
 INITRAMFS_ROOT := $(WORKDIR)/initramfs
+INITRAMFS_SHALLOW := $(WORKDIR)/initramfs-shallow
 LINUX_DIR_REL := ./linux
 LINUX_DIR := $(realpath $(LINUX_DIR_REL))
 BUSYBOX_DIR := $(WORKDIR)/busybox
 BUSYBOX_CONFIG := $(BUSYBOX_DIR)/.config
 BUSYBOX_BINARY := $(BUSYBOX_DIR)/busybox
 INITRAMFS_ARCHIVE := $(WORKDIR)/init.cpio
+LIBS_DIR := $(WORKDIR)/libs
+
+# Export initramfs path for the libraries module
+export INITRAMFS_DIR := $(INITRAMFS_ROOT)
 
 # List of busybox applets to link
 BUSYBOX_APPLETS := ash cat cp ls mkdir mount umount sh echo grep vi find clear \
@@ -142,9 +147,14 @@ $(BUSYBOX_SYMLINKS_SENTINEL): $(INITRAMFS_ROOT)/bin/busybox
 
 # Target for creating the initramfs archive
 # Depends on the essential components being present
-$(INITRAMFS_ARCHIVE): $(INITRAMFS_ROOT)/bin/shell $(INITRAMFS_ROOT)/bin/busybox $(BUSYBOX_SYMLINKS_SENTINEL) $(INITRAMFS_ROOT)/sbin/init $(INITRAMFS_ROOT)/shallow
+$(INITRAMFS_ARCHIVE): $(INITRAMFS_ROOT)/bin/shell $(INITRAMFS_ROOT)/bin/busybox $(BUSYBOX_SYMLINKS_SENTINEL) $(INITRAMFS_ROOT)/sbin/init $(INITRAMFS_ROOT)/shallow prepare_libraries
 	@echo "Creating initramfs archive..."
 	cd $(INITRAMFS_ROOT) && find . | cpio -H newc -o > $(INITRAMFS_ARCHIVE)
+
+# Target to prepare libraries
+.PHONY: prepare_libraries
+prepare_libraries:
+	@$(MAKE) -C $(LIBS_DIR)
 
 # Copy kernel config
 .PHONY: kernel_config
